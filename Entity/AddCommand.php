@@ -3,9 +3,9 @@
 namespace Kunstmaan\AdminBundle\Entity;
 
 use Kunstmaan\AdminBundle\Entity\User as Baseuser;
-
 use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\Mapping as ORM;
+use Kunstmaan\AdminBundle\Modules\ClassLookup;
 
 /**
  * omnext addcommand
@@ -16,7 +16,7 @@ use Doctrine\ORM\Mapping as ORM;
  * @ORM\Table(name="addcommand")
  * 
  */
-class AddCommand extends Command{
+class AddCommand extends Command implements Undoable{
 	
 	/**
 	 * @ORM\Id
@@ -30,6 +30,16 @@ class AddCommand extends Command{
 	 */
 	protected $user;
 	
+	/**
+	 * @ORM\Column(type="integer", nullable="true")
+	 */
+	protected $entityid;
+	
+	/**
+	 * @ORM\Column(type="string", nullable="true")
+	 */
+	protected $entityclass;
+	
 	public function __construct(EntityManager $em, Baseuser $user){
      	$this->em = $em;
      	$this->user = $user;
@@ -38,10 +48,26 @@ class AddCommand extends Command{
    	public function executeimpl($options){
    		$this->em->persist($options['entity']);
    		$this->em->flush();
+   		$this->em->refresh($options['entity']);
+   		
+   		$this->entityid = $options['entity']->getId();
+   		$this->entityclass = ClassLookup::getClass($options['entity']);
+   		
+   		$this->em->persist($this);
+   		$this->em->flush();
    	}
     
     public function removeimpl(){
     	// TODO extra actions
+    }
+    
+    public function undo(){
+    	$repo = $this->em->getRepository($this->entityclass);
+    	$entity = $repo->find($this->entityid);
+    	$this->em->remove($entity);
+    	$this->em->flush();
+    	
+		$this->remove();
     }
     
     /**
